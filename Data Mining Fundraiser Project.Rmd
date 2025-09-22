@@ -1,0 +1,287 @@
+---
+title: "R Data Mining Project"
+author: "Marco Teniente"
+date: "2023-05-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Background
+
+#### A national veterans organization wishes to develop a predictive model to improve the cost-effectiveness of their direct marketing campaign. The organization, with its in-house database of over 13 million donors, is one of the largest direct-mail fundraisers in the United States. According to their recent mailing records, the overall response rate is 5.1%. Out of those who responded (donated), the average donation is $13.00. Each mailing, which includes a gift of personalized address labels and assortments of cards and envelopes, costs $0.68 to produce and send. Using these facts, we take a  sample of this dataset to develop a classification model that can effectively capture donors so that the expected net profit is maximized. Weighted sampling was used, under-representing the non-responders so that the sample has equal numbers of donors and non-donors. 
+
+## Business Objectives and Goals
+
+#### The goal of this analysis is to maximize the United States National Veterans Organization's cost-effectiveness of their direct marketing campaign.
+
+#### The objective of the analysis is to create a predictive classification model to capture mail recipients that will make a donation to maximze the United States National Veterans Organization expected net profit.
+
+## Data Sources and Data Used
+
+#### In order to do achieve our business objectives and goals, the predictive model will be created and tested against a dataset made available to us, Fundraising.rds. The fundraising.rds dataset has 3,000 observations with 50% donors and 50% non-donors. 
+
+#### The reason our data set is using weighted sampling is important for our classification models. There can be a negative effect to our models if there is a difference in distribution for our classes. We would not want to use a simple random sample because it can be bias towards any particular class that may be more frequent.
+
+#### Once this model is made, we will use the model against an additional dataset, future_fundraising.rds, to make our predictions. The future_fundraising.rds dataset has 120 observations.
+
+#### To start our analysis, we will first want to load libraries that will be used throughout our analysis.
+
+## Partitioning
+
+```{r Partitioning}
+library(tidyverse)
+library(ISLR2)
+library(corrplot)
+library(e1071)
+library(MASS)
+library(class)
+library(randomForest)
+library(tree)
+library(gbm)
+library(glmnet)
+library(caret)
+
+fundraising_data <- read_rds("C:/Users/dpmar/OneDrive/Documents/R/DATA/fundraising.rds") 
+ 
+set.seed(12345)
+
+## Takes random sample of 80% fundraising_data.
+
+train_sample <- sample(nrow(fundraising_data), nrow(fundraising_data) * 0.8)
+
+## Subsets train_sample data into a training & testing set.
+
+fundraising_train <- fundraising_data[train_sample, ]
+fundraising_test <- fundraising_data[-train_sample, ]
+```
+
+## Model Building
+
+```{r Model Building}
+
+## **Exploratory Data Analysis**
+
+## First, we explore the structure and summary of fundraising_train. Here, we uncover multiple categorical & numeric variables, excluding the target response-type variable.
+
+str(fundraising_train)
+
+summary(fundraising_train)
+
+## To more easily analyze this dataset, we'll recode the categorical/nominal variables into a dummy dataset, labeled fundraising_dummy, respectively.
+
+fundraising_dummy <- fundraising_train %>% 
+  mutate(zipconvert2 = recode(zipconvert2, "No" = 0, "Yes" = 1), zipconvert3 = recode(zipconvert3, "No" = 0, "Yes" = 1), 
+         zipconvert4 = recode(zipconvert4, "No" = 0, "Yes" = 1), zipconvert5 = recode(zipconvert5, "No" = 0, "Yes" = 1),
+         homeowner = recode(homeowner, "No" = 0, "Yes" = 1), female = recode(female, "No" = 0, "Yes" = 1), 
+         target = recode(target, "No Donor" = 0, "Donor" = 1))
+
+## Utilizing cor() and corrplot(), We then compute and analysis the overall correlation of the obtained dummy dataset to assess potential colinearity among predictors. 
+
+dummy_cor <- cor(fundraising_dummy)
+corrplot(dummy_cor, type = "lower", method = "ellipse")
+
+## ZIP seems to demonstrate little-no correlations with donor-status, so we remove the respective variables, for clearer organization.
+
+fundraising_dummy <- fundraising_dummy %>%
+  dplyr::select(-c(1:5))
+
+dummy_cor <- cor(fundraising_dummy)
+
+## Here, we experiment with various kinds of data transformations. We conclude that a sqrd tf for months_since_donate & a log tf for num_child leads to maximal predictor power.
+
+fundraising_tf <- fundraising_dummy %>%
+  dplyr::transmute(num_child_log = log10(num_child), months_since_donate_sqrd = (months_since_donate)^2, 
+                sqr_prom_log = log10(num_prom), largest_gift_log = log10(largest_gift), 
+                lifetime_gifts_log = log10(lifetime_gifts), avg_gift_log = log10(avg_gift), target)
+
+fundraising_tf_cor <- cor(fundraising_tf, fundraising_tf$target)
+fundraising_tf_cor
+
+## From the correlation plot, we see months_since_donate, last_gift, and num_child to demonstrate the highest associations with target. We confirm this via assessing the specific correlations between the target (dummy_target_cor).
+
+corrplot(dummy_cor, type = "lower", method = "ellipse")
+
+dummy_target_cor <- cor(fundraising_dummy, fundraising_dummy$target)
+dummy_target_cor
+ 
+## num_proms, avg_gift, and lifetime_gifts demonstrate the highest colinear relationships with months_since_donate.
+
+dummy_months_cor <- cor(fundraising_dummy, fundraising_dummy$months_since_donate)
+dummy_months_cor
+
+## **Classification Models**
+
+## With the models below, paramaters num_child and months_since_donate will be utilized as a basis, given their highest colinearity and predictor potential.
+
+## Logistic Regression Model
+
+fundraising_train <- fundraising_train %>%
+  dplyr::mutate(num_child = recode(num_child, log10(num_child)), 
+         months_since_donate = recode(months_since_donate, (months_since_donate)^2))
+
+logmod <- glm(target ~ num_child + months_since_donate, family = "binomial", data=fundraising_train)
+summary(logmod)
+
+## Confusion Matrix and fraction of correct logistic predictions
+
+probs = predict(logmod, type= "response")
+preds = rep("No Donor", 1000)
+preds[probs > 0.5] = "Donor"
+preds = preds[c(1:600)]
+table(preds, fundraising_test$target)
+
+mean(preds == fundraising_test$target)
+
+## Only 50.5% of observations were predicted correctly under a logistic model. 
+
+## Linear Discriminant Analysis
+
+lda.fit <- lda(target ~ num_child + months_since_donate, data = fundraising_train)
+lda.fit
+
+## Confusion Matrix and fraction of correct LDA predictions
+
+lda.pred <- predict(lda.fit, newdata = fundraising_test, type="response")
+lda.class <- lda.pred$class
+table(lda.class, fundraising_test$target)
+
+mean(lda.class == fundraising_test$target)
+
+## Only 55.2% of observations were predicted correctly under a LDA model. 
+
+## Quadratic Discriminant Analysis
+
+qda.fit = qda(target ~ num_child + months_since_donate, data = fundraising_train)
+qda.fit
+
+## Confusion Matrix and fraction of correct LDA predictions
+
+qda.pred <- predict(qda.fit, newdata = fundraising_test, type="response")
+qda.class <- qda.pred$class
+table(qda.class, fundraising_test$target)
+
+mean(qda.class == fundraising_test$target)
+
+## Only 55.6% of observations were predicted correctly under a QDA model. 
+
+## K Nearest Neighbors 
+
+## Here, we construct a for loop which assesses all potential K values from 1-20 under a KNN model, with the specified training and testing data.
+
+acc <- list()
+
+x_train <- fundraising_train[,c("months_since_donate", "num_child")]
+y_train <- fundraising_train$target
+x_test <- fundraising_test[,c("months_since_donate", "num_child")]
+
+for (i in 1:20) {
+    knn_pred <- knn(train = x_train, test = x_test, cl = y_train, k = i)
+    acc[as.character(i)] = mean(knn_pred == fundraising_test$target)
+}
+
+acc <- unlist(acc)
+
+## Here, we construct a graph which plots all K values demonstrated in the for loop, which enables us to assess the highest potential accuracy with its respective K value.
+
+data_frame(acc = acc) %>%
+    mutate(k = row_number()) %>%
+    ggplot(aes(k, acc)) +
+    geom_col(aes(fill = k == which.max(acc))) +
+    labs(x = 'K', y = 'Accuracy', title = 'KNN Accuracy for different values of K') +
+    scale_x_continuous(breaks = 1:20) +
+    scale_y_continuous(breaks = round(c(seq(0.90, 0.94, 0.01), max(acc)),
+                                      digits = 3)) +
+    geom_hline(yintercept = max(acc), lty = 2) +
+    coord_cartesian(ylim = c(min(acc), max(acc))) +
+    guides(fill = FALSE)
+
+## Confusion Matrix and fraction of correct KNN predictions
+
+knn_pred <- knn(train = x_train, test = x_test, cl = y_train, k = 10)
+table(knn_pred , fundraising_test$target)
+
+mean(knn_pred == fundraising_test$target)
+
+## Approximately 59% of observations a predicted under this KNN model when K = 7.
+
+## Naive Bayes
+
+nbayes <- naiveBayes(target ~ ., data=fundraising_train)
+
+## Confusion Matrix and fraction of correct Bayes predictions
+
+nbayes_pred <- predict(nbayes, fundraising_test)
+table(nbayes_pred ,fundraising_test$target)
+
+mean(nbayes_pred == fundraising_test$target)
+
+## Approximately 55.6% of observations a predicted under this KNN model when K = 12.
+
+## Classification Tree
+
+fund_tree <- tree(target ~ ., data = fundraising_train)
+summary(fund_tree)
+
+fund_tree
+
+fund_tree_pred <- predict(fund_tree, fundraising_test, type = "class")
+
+## Confusion Matrix and fraction of correct Classification Tree predictions
+
+table(fund_tree_pred, fundraising_test$target)
+mean(fund_tree_pred == fundraising_test$target)
+
+## Random Forest Classification
+
+m <- ncol(fundraising_train) - 1
+fund_forest <- randomForest(target ~ ., data = fundraising_train, mtry = m, importance = TRUE)
+forest_pred <- predict(fund_forest, fundraising_test)
+
+## Confusion Matrix and fraction of correct Random Forest predictions
+
+table(forest_pred, fundraising_test$target)
+mean(forest_pred == fundraising_test$target)
+
+## Approximately 58.3% of observations a predicted under this Random Forest model.
+
+## Based on the models demonstrated, the K nearest-neighbors and random forest model demonstrate the highest potential with prediction power.
+
+## Best Model Training
+
+## **KNN**
+knn <- train(target~num_child + months_since_donate, data = fundraising_train, method='knn', tuneLength = 12)
+knnpred <- predict(knn, fundraising_test)
+mean(knnpred == fundraising_test$target)
+
+## **Random Forest**
+RF <- train(target~num_child + months_since_donate, data = fundraising_train, method='rf')
+RFpred <- predict(RF, fundraising_test)
+mean(RFpred == fundraising_test$target)
+
+
+## **Bayes**
+Bayes <- train(target~num_child + months_since_donate, data = fundraising_train, method='bayesglm')
+Bayespred <- predict(Bayes, fundraising_test)
+mean(Bayespred == fundraising_test$target)
+
+```
+
+## Testing
+
+```{r Testing}
+
+predict_data <- read_rds("C:/Users/dpmar/OneDrive/Documents/R/DATA/future_fundraising.rds")
+
+knnpred <- predict(knn, predict_data)
+
+write.table(knnpred, file = "knnpredictions.csv", col.names = c("value"), row.names = FALSE)
+
+```
+## Recommendations
+
+#### I would recommend that the United States National Veterans Organization utilize a K-Nearest Neighbor predictive model to best improve their odds of maximizing their expected net profit and increasing the cost effectiveness of their direct mail fundraising.
+
+#### When doing so, I would advise the organization to prioritize their focus on the number of children the mail recipeint has and the last time the recipient donated. The more children a recipient has, the more likely they are to donate, and the longer it has been since the recipient last donated, the more likely they are to donate.
