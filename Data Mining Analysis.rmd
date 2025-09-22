@@ -1,0 +1,148 @@
+---
+title: "Linear Regression"
+author: "Marco Teniente"
+date: "2023-02-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Carefully explain the differences between the KNN classifier and KNN regression methods.
+
+To predict Y for a given value of X, the KNN regression considers k closest points to X in training data and takes the average of the responses. The KNN classifier utilizes k closest points to training data to classify qualitative observations.
+
+## This question involves the use of multiple linear regression on the Auto data set.
+
+```{r Exercise 2}
+
+Auto <- read.csv("C:/Users/dpmar/OneDrive/Documents/R/DATA/Auto.csv", stringsAsFactors = T)
+
+## A): Produce a scatterplot matrix which includes all of the variables in the dataset.
+
+pairs(Auto)
+
+## B): Compute the matrix of correlations between the variables using the function cor().
+
+Auto <- Auto[,-9]
+AutoTF <- Auto[,-4]
+
+cor(AutoTF)
+
+## C): Use the lm() function to perform a multiple linear regression with mpg as the response and all other variables except name as the predictors. Use the summary() function to print the results. Comment on the output.
+
+## Based on the multiple linear regression, there appears to be a relationship between the predictors and response. Weight, acceleration, year, and origin demonstrate the highest influence & significance. The coefficient for the year variable suggests a positive correlation between mpg. 
+
+lm.Auto=lm(mpg~cylinders + displacement + weight + acceleration + year + origin, data=Auto)
+
+summary(lm.Auto)
+
+## D) Use the plot() function to produce diagnostic plots of the linear regression fit. Comment on any problems you see with the fit.
+
+## The residual plot shows greater deviations as the fitted values increase. The leverage plot also identifies 3 observations with a higher than average leverage.
+
+plot(lm.Auto)
+
+## E) Use the * and : symbols to fit linear regression models with interaction effects. Do any interactions appear to be statistically significant?
+
+## All of the tested interactions are statistically significant.
+
+lm.Auto.Inter=lm(mpg~cylinders:displacement + displacement:weight + weight:acceleration + acceleration:year + year:origin, data=Auto)
+
+summary(lm.Auto.Inter)
+
+## F) Try a few different transformations of the variables, such as log(X), √X, X2. Comment on your findings.
+
+## It appears the log & sqrt transformations impact influence/correlations of origin, acceleration, & displacement on mpg.
+
+lm.Auto.log=lm(mpg~log(cylinders) + log(displacement) + log(weight) + log(acceleration) + log(year) + log(origin), data=Auto)
+
+lm.Auto.sqrt=lm(mpg~sqrt(cylinders) + sqrt(displacement) + sqrt(weight) + sqrt(acceleration) + sqrt(year) + sqrt(origin), data=Auto)
+
+lm.Auto.sqrd=lm(mpg~(cylinders)^2 + (displacement)^2 + (weight)^2 + (acceleration)^2 + (year)^2 + (origin)^2, data=Auto)
+
+summary(lm.Auto.log)
+summary(lm.Auto.sqrt)
+summary(lm.Auto.sqrd)
+
+plot(lm.Auto.log)
+plot(lm.Auto.sqrt)
+plot(lm.Auto.sqrd)
+```
+
+## This question should be answered using the Carseats data set.
+
+
+```{r Exercise 3}
+library(ISLR2)
+
+head(Carseats)
+
+## A) Fit a multiple regression model to predict Sales using Price, Urban, and US.
+
+lm.Carseats=lm(Sales ~ Price + Urban + US, data=Carseats)
+summary(lm.Carseats)
+
+## B) Provide an interpretation of each coefficient in the model. Be careful—some of the variables in the model are qualitative!
+
+## "Price" is the company charges for car seats at each site. "Urban" indicates whether the store is in an urban or rural location. "US" indicates whether the store is in the US or not.
+
+## C) Write out the model in equation form, being careful to handle the qualitative variables properly.
+
+## Y = 13.043469 - 0.054459x1 - 0.021916x2 + 1.200573x3 + Error
+
+## D) For which of the predictors can you reject the null hypothesis H0 : βj = 0?
+
+## Predictors Price and US can reject the null hypothesis Bj = 0, given their respective probabilities are less than the designated alpha, 0.05.
+
+## E) On the basis of your response to the previous question, fit a smaller model that only uses the predictors for which there is evidence of association with the outcome. 
+
+lm.Carseats.assn=lm(Sales ~ Price + US, data=Carseats)
+summary(lm.Carseats.assn)
+
+## F) How well do the models in (a) and (e) fit the data?
+
+## Both models appear to fit the data extremely well, as the residual plots demonstrate a random spread, and the  Q-Q plots present almost identical fits.
+
+plot(lm.Carseats)
+plot(lm.Carseats.assn)
+
+## Using the model from (e), obtain 95 % confidence intervals for the coefficient(s).
+
+confint(lm.Carseats.assn)
+```
+
+## This problem involves simple linear regression without an intercept.
+
+```{r Exercise 4}
+
+## A) Recall that the coefficient estimate βˆ for the linear regression of Y onto X without an intercept is given by (3.38). Under what circumstance is the coefficient estimate for the regression of X onto Y the same as the coefficient estimate for the regression of Y onto X?
+
+## The coefficeient estimate for regression of X onto Y is the same as Y onto XD when the observation is set to 1.
+
+## B) Generate an example in R with n = 100 observations in which the coefficient estimate for the regression of X onto Y is different from the coefficient estimate for the regression of Y onto X.
+
+x <- rnorm (100)
+
+y <- 2 * x 
+
+xce <- 2 * y
+yce <- y
+
+xce
+yce
+
+## C) Generate an example in R with n = 100 observations in which the coefficient estimate for the regression of X onto Y is the same as the coefficient estimate for the regression of Y onto X.
+
+
+x <- rnorm (100)
+
+y <-  x
+
+xce <- y
+yce <- y
+
+xce
+yce
+```
