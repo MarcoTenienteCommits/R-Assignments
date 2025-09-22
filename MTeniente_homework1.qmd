@@ -1,0 +1,249 @@
+---
+title: "Homework 1"
+subtitle: "MSDA DA 6233 Fall 2025"
+author: "Marco Teniente, Bnw504"
+format: html
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r}
+#| label = "setup",
+#| include = FALSE
+options(pillar.sigfig = 3)
+library(tidyverse)
+```
+
+This homework uses `company_financials_csv.zip` which we used in week 3. 
+
+Read `company_financials_csv.zip` into your R session using `read_csv()` function from `readr` package, which is part of `tidyverse` package. Store the resulting object in `d1`.
+
+```{r}
+d1 = read_csv(here::here("company_financials_csv.zip"))
+```
+
+Before you begin, include only the rows with `sale > 0`. 
+
+```{r}
+#| echo = TRUE
+d2 = filter(d1, saleq > 0)
+```
+
+
+<p style="border:3px; border-style:solid; border-color:#b50000; padding: 1em;">This homework consists of 8 questions. Q1 carries 1 point. Q2 through Q8 carry two points each. We use `d2` as the initial input. Your objective is to reproduce the output shown in the PDF file for Q1 through Q8. </p>
+
+
+# Q1
+
+Print a data frame with the maximum values of `actq`, `ltq`, and `capxy`. 
+
+`actq` is Current Assets - Total (USD million)
+`ltq` is Liabilities - Total (USD million)
+`capxy` is Year to Date Capital Expenditures (USD million)
+
+```{r}
+d2 |>
+  summarize(
+    actq = max(actq, na.rm = TRUE), 
+    ltq = max(ltq, na.rm = TRUE), 
+    capxy = max(capxy, na.rm = TRUE))
+```
+
+
+# Q2
+
+Print a data frame with the standard deviations of `cheq`, `invtq`, and `xsgaq` for Microsoft, Amazon, and Alphabet. For this, you will need to follow these steps:
+
+1. Filter only the observations where `conm` contains any of these: Microsoft, Amazon, and Alphabet (use appropriate string matching)
+2. Group by `conm`
+3. Summarize `cheq`, `invtq`, and `xsgaq` to get their standard deviations
+4. Print it as a data frame by using `as.data.frame()` function. **This is necessary to show the decimal points correctly.**
+
+In Step 3, you may **optionally** use `across()` inside `summarize()`. This function will save you writing more code. Read more about it here: https://dplyr.tidyverse.org/reference/across.html
+
+```{r}
+Q2 = d2 |>
+    filter(conm %in% c("MICROSOFT CORP", "AMAZON.COM INC", 
+                   "ALPHABET INC")) |>
+    group_by(conm) |>
+    summarize(cheq = sd(cheq, na.rm = TRUE), 
+              invtq = sd(invtq, na.rm = TRUE), 
+              xsgaq = sd(xsgaq)) |>
+    as.data.frame()
+
+Q2
+```
+
+# Q3
+
+Round all the numeric variables in the above data frame to 2 decimal places. Output as a data frame using `as.data.frame()` function.
+
+For rounding, you will have to use `mutate`. You can save typing by using `across` and `where` functions from `dplyr` package. Check https://www.tidyverse.org/blog/2020/04/dplyr-1-0-0-colwise/ for more information.
+
+```{r}
+round_2 = function(x){round(x, digits = 2)} 
+
+Q2 |>
+  mutate(across(2:4, round_2))
+```
+
+# Q4
+
+Many companies have zero or missing capital expenditure values. We can calculate the total number of companies with missing capital expenditures by running the following function:
+
+```{r}
+#| echo = TRUE
+sum(is.na(d2$capxy))
+```
+
+*I urge you to understand this piece of code. It is a quick way to count missing values for any given variable in the data frame.*
+
+For this exercise, we will assume that missing capital expenditure is zero. This is a reasonable assumption because companies usually report these expenses when they are material. Capital expenditures represent investments in physical assets like buildings, equipment, and machinery. Zero capital expenditures might indicate companies that are not growing or are in mature industries with minimal need for new physical assets.
+
+Overwrite `capxy` by replacing all the missing values with 0. Next, create a new variable `capex_intensity` as the ratio of `capxy` (Capital Expenditures) to `saleq` (Sales/Turnover). This ratio shows how much a company invests in capital relative to its sales.
+
+The first six values of `d3` for companies with non-zero capital expenditures are as follows:
+
+```{r}
+d3 = d2 |>
+    mutate(capxy = replace_na(capxy, 0), 
+           capex_intensity = capxy/saleq) 
+d3 |>
+  dplyr::select(conm, datadate, capxy, saleq, capex_intensity) |>
+  head()
+```
+
+Also, print the first six rows where capital expenditures are zero to see the `capex_intensity` values:
+
+```{r}
+d3 |>
+  filter(capxy == 0) |>
+  dplyr::select(conm, datadate, capxy, saleq, capex_intensity) |>
+  head()
+```
+
+
+
+# Q5
+
+Using `d3`, create the following variables and print first 8 rows for Intel with the new columns along with `conm` and `datadate`:
+
+1. Current ratio (`current_ratio`) = `actq` / `lctq`
+2. Debt-to-equity ratio (`debt_equity`) = (`dlttq` + `dlcq`) / `seqq`
+3. Inventory turnover (`inventory_turnover`) = `cogsq` / `invtq`
+
+If any of the denominator variables (`lctq`, `seqq`, `invtq`) are `NA` or zero, you can assume they are a very small positive number (0.001) to avoid division by zero. You can do it using `ifelse()` function or `replace_na()` function from `tidyr`.
+
+```{r}
+d3 = d3 |>
+  mutate(current_ratio = (actq/lctq), 
+         debt_equity = ((dlttq+dlcq)/seqq), 
+         inventory_turnover = (cogsq/invtq),
+         lctq = replace_na(lctq, 0),
+         seqq = replace_na(seqq, 0),
+         invtq = replace_na(invtq, 0))
+
+Q5 = d3 |>
+      dplyr::select(conm, datadate, current_ratio, debt_equity, inventory_turnover) |>
+      filter(conm == "INTEL CORP") 
+
+
+head(Q5, 8)
+         
+```
+
+
+
+
+
+# Q6
+
+You want to know how many quarters each company had positive cash flows from operations (approximated by operating income before depreciation). For this, follow these steps:
+
+1. Create an indicator variable (dummy variable) called `positive_cf` such that when `oibdpq > 0` this variable is 1. Otherwise it is 0.
+2. Group by company names
+3. Summarize `positive_cf` by taking its sum. Also, get the total number of observations for each company.
+
+```{r}
+d3 |>
+  filter(!is.na(oibdpq)) |>
+  mutate(positive_cf = ifelse(oibdpq > 0, 1, 0)) |>
+  group_by(conm) |>
+  summarize(positive_cf_quarters = sum(positive_cf, na.rm = TRUE), 
+            total_quarters = n()
+            )
+```
+
+
+
+# Q7
+
+Find the average quarterly growth rates in total assets for all companies. Follow these steps:
+
+1. Arrange the data set by `conm` and `datadate`.
+2. Group by `conm`
+3. Calculate asset growth rate `asset_growth` by taking the difference between `atq` (Total Assets) and its lag and then divide the difference by the lag of `atq` (Hint: Here you can use the `lag()` function from `dplyr`.)
+4. Calculate sales growth rate `sales_growth` by taking the difference between `saleq` (Sales) and its lag and then divide the difference by the lag of `saleq` 
+5. Summarize to get the mean of the growth rates `asset_growth_mean` and `sales_growth_mean`.
+6. Display the average growth rates in percentage format. (Hint: learn more about percent() function from scales package, which is already installed with tidyverse)
+
+```{r}
+library(scales)
+
+d3 |>
+    arrange(conm, datadate) |>
+    group_by(conm) |>
+    mutate(asset_growth = ((atq-lag(atq))/lag(atq)), 
+    sales_growth = ((saleq-lag(saleq))/lag(saleq))) |>
+    summarize(asset_growth_mean = percent(mean(asset_growth, na.rm=TRUE), accuracy = 0.001), 
+              sale_growth_mean = percent(mean(sales_growth, na.rm=TRUE), accuracy = 0.01)) |>
+    as.data.frame()
+```
+
+Not graded: Which type of growth rate (assets or sales) would be more relevant for evaluating a company's operational performance?
+
+
+# Q8
+
+In financial analysis, we often create industry-adjusted metrics by comparing a company's performance to its industry average. A company-specific standardized variable can be created by subtracting the industry mean from the company's value and dividing by the industry standard deviation.
+
+You want to create an industry-adjusted variable for `txtq` (Income Taxes) divided by `oiadpq` (Operating income after depreciation) using the `gsector` (GIC Sectors) classification. Follow these steps:
+
+1. Create a variable `tax_rate` by dividing `txtq` by `oiadpq`
+2. Filter *out* (i.e., remove) the rows where `oiadpq` is negative or zero
+3. Group by `gsector`
+4. Summarize `tax_rate` to get the mean (`tax_mean`) and the standard deviation (`tax_sd`) for each sector
+5. Assign this dataframe to `d3_sector`
+6. Join `d3` and `d3_sector` by `gsector`
+7. Create `tax_industry_adj` by subtracting `tax_mean` from `tax_rate` and dividing this difference by `tax_sd`
+8. Round all the variables with "tax" in them to 3 decimal places
+
+Print the first 10 rows for any technology company with `conm`, `gsector`, `tax_rate`, `tax_industry_adj`, `tax_mean`, and `tax_sd` using `as.data.frame()`
+
+```{r}
+round_3 = function(x){round(x, digits = 3)}
+
+d3_sector = d3 |>
+            mutate(tax_rate = (txtq/oiadpq)) |>
+            filter(oiadpq > 0) |>
+            group_by(gsector) |>
+            summarize(tax_mean = mean(tax_rate), 
+                      tax_sd = sd(tax_rate))
+
+d3 = d3 |> inner_join(d3_sector, by = "gsector")
+
+Q8 = d3 |>
+      mutate(tax_rate = (txtq/oiadpq),
+      tax_industry_adj = ((tax_rate-tax_mean)/(tax_sd)),
+      across(starts_with("tax"), round_3)) |>
+      dplyr::select(conm, gsector, fyearq, fqtr, tax_rate, tax_industry_adj, tax_mean, tax_sd) |>
+      as.data.frame()
+
+head(Q8, 10)
+```
+
+This industry-adjusted tax metric helps identify companies that pay significantly more or less taxes relative to their industry peers. Negative values indicate below-average tax payments for the sector, while positive values indicate above-average tax payments.
+
+
